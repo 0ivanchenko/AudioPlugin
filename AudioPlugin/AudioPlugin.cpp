@@ -42,6 +42,13 @@ typedef struct {
 	int bypass; // флаг включения/выключения эффекта
 } PluginSettings;
 
+typedef struct {
+	AudioInput input; // аудиовход
+	AudioOutput output; // аудиовыход
+	AudioEffect** effects; // массив указателей на эффекты
+	size_t numEffects; // количество эффектов
+	PluginSettings settings; // настройки плагина
+} AudioPlugin;
 int main() {
 
 	setlocale(LC_ALL, "ru");
