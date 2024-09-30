@@ -27,6 +27,21 @@ typedef struct {
 	float feedback; // уровень обратной связи
 } Delay;
 
+typedef struct {
+	AudioBuffer buffer; // аудио буфер с входными данными
+	char* source; // источник аудиосигнала (например, файл)
+} AudioInput;
+
+typedef struct {
+	AudioBuffer buffer; // аудио буфер с входными данными
+	char* destination; // место сохранения или проигрывания аудиосигнала
+} AudioOutput;
+
+typedef struct {
+	float gain; // усиление сигнала
+	int bypass; // флаг включения/выключения эффекта
+} PluginSettings;
+
 int main() {
 
 	setlocale(LC_ALL, "ru");
