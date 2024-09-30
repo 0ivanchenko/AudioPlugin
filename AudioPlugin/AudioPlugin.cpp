@@ -28,12 +28,12 @@ typedef struct {
 } Delay;
 
 typedef struct {
-	AudioBuffer buffer; // аудио буфер с входными данными
+	AudioBuffer buffer; // аудио буффер с входными данными
 	char* source; // источник аудиосигнала (например, файл)
 } AudioInput;
 
 typedef struct {
-	AudioBuffer buffer; // аудио буфер с входными данными
+	AudioBuffer buffer; // аудио буффер с входными данными
 	char* destination; // место сохранения или проигрывания аудиосигнала
 } AudioOutput;
 
@@ -165,4 +165,27 @@ int main() {
 
 	setlocale(LC_ALL, "ru");
 
+	// Инициализация аудиоплагина
+	AudioPlugin plugin;
+	initAudioBuffer(&plugin.input.buffer, 1024, 44100);
+	initAudioBuffer(&plugin.output.buffer, 1024, 44100);
+
+	// Инициализация реверберации и задержки
+	Reverb reverb;
+	initReverb(&reverb, 0.8f, 0.5f, 0.7f);
+
+	Delay delay;
+	initDelay(&delay, 500.0f, 0.4f, 0.6f);
+
+	// Добавление эффектов в плагин
+	AudioEffect* effects[] = { (AudioEffect*)&reverb, (AudioEffect*)&delay };
+	plugin.effects = effects;
+	plugin.numEffects = 2;
+
+	// Применение эффектов
+	applyEffect(&plugin);
+
+	// Освобождение памяти
+	freeAudioBuffer(&plugin.input.buffer);
+	freeAudioBuffer(&plugin.output.buffer);
 }
