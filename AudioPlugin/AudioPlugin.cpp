@@ -15,6 +15,18 @@ typedef struct {
 	void (*process)(AudioBuffer* input, AudioBuffer* output); // функция для обработки входного аудиобуфера
 } AudioEffect;
 
+typedef struct {
+	AudioBuffer effect; // наследуем поля от AudioEffect
+	float roomSize; // размер комнаты для реверберации
+	float dampening; // уровень демпфирования
+} Reverb;
+
+typedef struct {
+	AudioBuffer effect; // наследуем поля от AudioEffect
+	float delayTime; // время задержки в миллисекундах
+	float feedback; // уровень обратной связи
+} Delay;
+
 int main() {
 
 	setlocale(LC_ALL, "ru");
