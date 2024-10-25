@@ -1,191 +1,275 @@
-﻿#include <iostream>
+﻿#define _CRT_SECURE_NO_WARNINGS
+
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
 
-typedef struct {
-	float* data; // указатель на массив данных аудиосигнала
-	size_t size; // размер буфера (количество сэмплов)
-	int sampleRate; // частота дискретизации
-} AudioBuffer;
+class AudioBuffer {
+private:
+    float* data; // указатель на массив данных аудиосигнала
+    size_t size; // размер буфера (кол-во сэмплов)
+    int sampleRate; // частота дискретизации
 
-typedef struct {
-	float mix; // коэффициент смешивания сухого и обработанного сигнала
-	void (*process)(AudioBuffer* input, AudioBuffer* output); // функция для обработки входного аудиобуфера
-} AudioEffect;
+public:
+    AudioBuffer() : data(nullptr), size(0), sampleRate(0) {}
 
-typedef struct {
-	AudioEffect effect; // наследуем поля от AudioEffect
-	float roomSize; // размер комнаты для реверберации
-	float dampening; // уровень демпфирования
-} Reverb;
+    void init(size_t size, int sampleRate) {
+        this->data = (float*)malloc(size * sizeof(float));
+        this->size = size;
+        this->sampleRate = sampleRate;
+    }
+    void freeBuffer() {
+        free(this->data);
+    }
+    float* getData() const { return data; }
+    size_t getSize() const { return size; }
+    int getSampleRate() const { return sampleRate; }
+};
 
-typedef struct {
-	AudioEffect effect; // наследуем поля от AudioEffect
-	float delayTime; // время задержки в миллисекундах
-	float feedback; // уровень обратной связи
-} Delay;
+class AudioEffect {
+protected:
+    float mix; // коэффициент смешивания сухого и обработанного сигнала
+    virtual void processEffect(AudioBuffer* input, AudioBuffer* output) = 0; // чисто виртуальная функция
 
-typedef struct {
-	AudioBuffer buffer; // аудио буффер с входными данными
-	char* source; // источник аудиосигнала (например, файл)
-} AudioInput;
+public:
+    AudioEffect() : mix(0.0f) {}
+    virtual ~AudioEffect() {}
 
-typedef struct {
-	AudioBuffer buffer; // аудио буффер с входными данными
-	char* destination; // место сохранения или проигрывания аудиосигнала
-} AudioOutput;
+    void setMix(float mix) { this->mix = mix; }
+    float getMix() const { return mix; }
 
-typedef struct {
-	float gain; // усиление сигнала
-	int bypass; // флаг включения/выключения эффекта
-} PluginSettings;
+    void applyEffect(AudioBuffer* input, AudioBuffer* output) {
+        // Основная структура алгоритма
+        processEffect(input, output);
+    }
+};
 
-typedef struct {
-	AudioInput input; // аудиовход
-	AudioOutput output; // аудиовыход
-	AudioEffect** effects; // массив указателей на эффекты
-	size_t numEffects; // количество эффектов
-	PluginSettings settings; // настройки плагина
-} AudioPlugin;
+class Reverb : public AudioEffect {
+private:
+    float roomSize; // размер комнаты для реверберации
+    float dampening; // уровень демпфирования
 
-// Инициализация аудио буффера
-void initAudioBuffer(AudioBuffer* buffer, size_t size, int sampleRate) {
-	buffer->data = (float*)malloc(size * sizeof(float));
-	buffer->size = size;
-	buffer->sampleRate = sampleRate;
-}
-// Освобождение памяти аудио буффера
-void freeAudioBuffer(AudioBuffer* buffer) {
-	free(buffer->data);
-}
-// Применение эффекта к аудиоданным
-void applyEffect(AudioPlugin* plugin) {
-	for (size_t i = 0; i < plugin->numEffects; i++) {
-		plugin->effects[i]->process(&plugin->input.buffer, &plugin->output.buffer);
-	}
-}
-// Реализация функции обработки реверберации
-void processReverb(AudioBuffer* input, AudioBuffer* output) {
+public:
+    Reverb() : roomSize(0.0f), dampening(0.0f) {}
 
-	// Параметры реверберации
-	const size_t bufferSize = input->size;
-	const float roomSize = 0.8f;
-	const float dampening = 0.5f;
+    void init(float roomSize, float dampening, float mix) {
+        this->roomSize = roomSize;
+        this->dampening = dampening;
+        this->mix = mix;
+    }
 
-	// Временные буферы для реверберации
-	float* delayBuffer1 = (float*)malloc(bufferSize * sizeof(float));
-	float* delayBuffer2 = (float*)malloc(bufferSize * sizeof(float));
+    void processEffect(AudioBuffer* input, AudioBuffer* output) override {
+        const size_t bufferSize = input->getSize();
+        float* delayBuffer1 = (float*)malloc(bufferSize * sizeof(float));
+        float* delayBuffer2 = (float*)malloc(bufferSize * sizeof(float));
 
-	// Инициализация буферов
-	for (size_t i = 0; i < bufferSize; i++) {
-		delayBuffer1[i] = 0.0f;
-		delayBuffer2[i] = 0.0f;
-	}
+        for (size_t i = 0; i < bufferSize; i++) {
+            delayBuffer1[i] = 0.0f;
+            delayBuffer2[i] = 0.0f;
+        }
 
-	// Основной цикл обработки
-	for (size_t i = 0; i < bufferSize; i++) {
-		// Вычисление индексов для задержек
-		size_t delayIndex1 = (i + (size_t)(roomSize * input->sampleRate)) % bufferSize;
-		size_t delayIndex2 = (i + (size_t)((roomSize + 0.1f) * input->sampleRate)) % bufferSize;
+        for (size_t i = 0; i < bufferSize; i++) {
+            size_t delayIndex1 = (i + (size_t)(roomSize * input->getSampleRate())) % bufferSize;
+            size_t delayIndex2 = (i + (size_t)((roomSize + 0.1f) * input->getSampleRate())) % bufferSize;
 
-		// Вычисление выходного сигнала
-		float delayedSample1 = delayBuffer1[delayIndex1];
-		float delayedSample2 = delayBuffer2[delayIndex2];
+            float delayedSample1 = delayBuffer1[delayIndex1];
+            float delayedSample2 = delayBuffer2[delayIndex2];
 
-		float outputSample = input->data[i] + dampening * (delayedSample1 + delayedSample2);
+            float outputSample = input->getData()[i] + dampening * (delayedSample1 + delayedSample2);
 
-		// Обновление буферов задержки
-		delayBuffer1[i] = input->data[i] + dampening * delayedSample1;
-		delayBuffer2[i] = input->data[i] + dampening * delayedSample2;
+            delayBuffer1[i] = input->getData()[i] + dampening * delayedSample1;
+            delayBuffer2[i] = input->getData()[i] + dampening * delayedSample2;
 
-		// Запись выходного сигнала
-		output->data[i] = outputSample;
-	}
+            output->getData()[i] = outputSample;
+        }
 
-	// Освобождение памяти
-	free(delayBuffer1);
-	free(delayBuffer2);
-}
+        free(delayBuffer1);
+        free(delayBuffer2);
+    }
+};
 
-// Инициализация реверберации
-void initReverb(Reverb* reverb, float roomSize, float dampening, float mix) {
-	reverb->effect.mix = mix;
-	reverb->roomSize = roomSize;
-	reverb->dampening = dampening;
-	reverb->effect.process = processReverb;
+class Delay : public AudioEffect {
+private:
+    float delayTime; // время задержки в миллисекундах
+    float feedback; // уровень обратной связи
 
-}
+public:
+    Delay() : delayTime(0.0f), feedback(0.0f) {}
 
-// Реализация функции обработки задержки
-void processDelay(AudioBuffer* input, AudioBuffer* output) {
+    void init(float delayTime, float feedback, float mix) {
+        this->delayTime = delayTime;
+        this->feedback = feedback;
+        this->mix = mix;
+    }
 
-	// Параметры задержки
-	const size_t bufferSize = input->size;
-	const float delayTime = 500.0f; // Время задержки в миллисекундах
-	const float feedback = 0.4f;
+    void processEffect(AudioBuffer* input, AudioBuffer* output) override {
+        const size_t bufferSize = input->getSize();
+        float* delayBuffer = (float*)malloc(bufferSize * sizeof(float));
 
-	// Временный буфер для задержки
-	float* delayBuffer = (float*)malloc(bufferSize * sizeof(float));
+        for (size_t i = 0; i < bufferSize; i++) {
+            delayBuffer[i] = 0.0f;
+        }
 
-	// Инициализация буфера
-	for (size_t i = 0; i < bufferSize; i++) {
-		delayBuffer[i] = 0.0f;
-	}
+        for (size_t i = 0; i < bufferSize; i++) {
+            size_t delayIndex = (i + (size_t)(delayTime * input->getSampleRate() / 1000.0f)) % bufferSize;
 
-	// Основной цикл обработки
-	for (size_t i = 0; i < bufferSize; i++) {
-		// Вычисление индекса для задержки
-		size_t delayIndex = (i + (size_t)(delayTime * input->sampleRate / 1000.0f)) % bufferSize;
+            float delayedSample = delayBuffer[delayIndex];
+            float outputSample = input->getData()[i] + feedback * delayedSample;
 
-		// Вычисление выходного сигнала
-		float delayedSample = delayBuffer[delayIndex];
-		float outputSample = input->data[i] + feedback * delayedSample;
+            delayBuffer[i] = input->getData()[i] + feedback * delayedSample;
 
-		// Обновление буфера задержки
-		delayBuffer[i] = input->data[i] + feedback * delayedSample;
+            output->getData()[i] = outputSample;
+        }
 
-		// Запись выходного сигнала
-		output->data[i] = outputSample;
-	}
+        free(delayBuffer);
+    }
+};
 
-	// Освобождение памяти
-	free(delayBuffer);
-}
-// Инициализация задержки
-void initDelay(Delay* delay, float delayTime, float feedback, float mix) {
-	delay->effect.mix = mix;
-	delay->delayTime = delayTime;
-	delay->feedback = feedback;
-	delay->effect.process = processDelay;
-}
+class AudioFile {
+private:
+    char* filePath;
+
+public:
+    AudioFile(const char* filePath) {
+        this->filePath = strdup(filePath);
+    }
+
+    ~AudioFile() {
+        free(filePath);
+    }
+
+    const char* getFilePath() const { return filePath; }
+};
+
+class AudioInput {
+private:
+    AudioBuffer buffer; // аудио буффер с входными данными
+    char* source; // источник аудиосигнала (например, файл)
+
+public:
+    AudioInput() : source(nullptr) {}
+
+    void init(size_t size, int sampleRate, const char* source) {
+        buffer.init(size, sampleRate);
+        this->source = strdup(source);
+    }
+
+    void freeInput() {
+        buffer.freeBuffer();
+        free(source);
+    }
+
+    AudioBuffer* getBuffer() { return &buffer; }
+    const char* getSource() const { return source; }
+};
+
+class AudioOutput {
+private:
+    AudioBuffer buffer; // аудио буффер с входными данными
+    char* destination; // место сохранения или проигрывания аудиосигнала
+
+public:
+    AudioOutput() : destination(nullptr) {}
+
+    void init(size_t size, int sampleRate, const char* destination) {
+        buffer.init(size, sampleRate);
+        this->destination = strdup(destination);
+    }
+
+    void freeOutput() {
+        buffer.freeBuffer();
+        free(destination);
+    }
+
+    AudioBuffer* getBuffer() { return &buffer; }
+    const char* getDestination() const { return destination; }
+};
+
+class PluginSettings {
+private:
+    float gain; // усиление сигнала
+    int bypass; // флаг включения/выключения эффекта
+
+public:
+    PluginSettings() : gain(1.0f), bypass(0) {}
+
+    void setGain(float gain) { this->gain = gain; }
+    void setBypass(int bypass) { this->bypass = bypass; }
+
+    float getGain() const { return gain; }
+    int getBypass() const { return bypass; }
+};
+
+class AudioPlugin {
+private:
+    AudioInput input; // аудиовход
+    AudioOutput output; // аудиовыход
+    AudioEffect** effects; // массив указателей на эффекты
+    size_t numEffects; // количество эффектов
+    PluginSettings settings; // настройки плагина
+
+public:
+    AudioPlugin() : effects(nullptr), numEffects(0) {}
+
+    void init(size_t inputSize, int inputSampleRate, AudioFile* inputSource,
+        size_t outputSize, int outputSampleRate, AudioFile* outputDestination,
+        AudioEffect** effects, size_t numEffects) {
+        input.init(inputSize, inputSampleRate, inputSource->getFilePath());
+        output.init(outputSize, outputSampleRate, outputDestination->getFilePath());
+        this->effects = effects;
+        this->numEffects = numEffects;
+    }
+
+    void freePlugin() {
+        input.freeInput();
+        output.freeOutput();
+        for (size_t i = 0; i < numEffects; i++) {
+            delete effects[i];
+        }
+        delete[] effects;
+    }
+
+    void applyEffects() {
+        for (size_t i = 0; i < numEffects; i++) {
+            effects[i]->applyEffect(input.getBuffer(), output.getBuffer());
+        }
+    }
+
+    AudioInput* getInput() { return &input; }
+    AudioOutput* getOutput() { return &output; }
+    PluginSettings* getSettings() { return &settings; }
+};
 
 int main() {
+    setlocale(LC_ALL, "ru");
 
-	setlocale(LC_ALL, "ru");
+    // Создание динамического массива объектов класса
+    AudioEffect** effects = new AudioEffect * [2];
+    effects[0] = new Reverb();
+    effects[1] = new Delay();
 
-	// Инициализация аудиоплагина
-	AudioPlugin plugin;
-	initAudioBuffer(&plugin.input.buffer, 1024, 44100);
-	initAudioBuffer(&plugin.output.buffer, 1024, 44100);
+    // Инициализация эффектов
+    ((Reverb*)effects[0])->init(0.8f, 0.5f, 0.7f);
+    ((Delay*)effects[1])->init(500.0f, 0.4f, 0.6f);
 
-	// Инициализация реверберации и задержки
-	Reverb reverb;
-	initReverb(&reverb, 0.8f, 0.5f, 0.7f);
+    // Создание объектов AudioFile
+    AudioFile* inputFile = new AudioFile("input.wav");
+    AudioFile* outputFile = new AudioFile("output.wav");
 
-	Delay delay;
-	initDelay(&delay, 500.0f, 0.4f, 0.6f);
+    // Создание динамического объекта класса
+    AudioPlugin* plugin = new AudioPlugin();
+    plugin->init(1024, 44100, inputFile, 1024, 44100, outputFile, effects, 2);
 
-	// Добавление эффектов в плагин
-	AudioEffect* effects[] = { (AudioEffect*)&reverb, (AudioEffect*)&delay };
-	plugin.effects = effects;
-	plugin.numEffects = 2;
+    // Применение эффектов
+    plugin->applyEffects();
 
-	// Применение эффектов
-	applyEffect(&plugin);
+    // Освобождение памяти
+    plugin->freePlugin();
+    delete plugin;
+    delete inputFile;
+    delete outputFile;
 
-	// Освобождение памяти
-	freeAudioBuffer(&plugin.input.buffer);
-	freeAudioBuffer(&plugin.output.buffer);
+    return 0;
 }
