@@ -146,45 +146,43 @@ public:
 class AudioInput {
 private:
     AudioBuffer buffer; // аудио буффер с входными данными
-    char* source; // источник аудиосигнала (например, файл)
+    AudioFile* source; // источник аудиосигнала (например, файл)
 
 public:
     AudioInput() : source(nullptr) {}
 
-    void init(size_t size, int sampleRate, const char* source) {
+    void init(size_t size, int sampleRate, AudioFile* source) {
         buffer.init(size, sampleRate);
-        this->source = strdup(source);
+        this->source = source;
     }
 
     void freeInput() {
         buffer.freeBuffer();
-        free(source);
     }
 
     AudioBuffer* getBuffer() { return &buffer; }
-    const char* getSource() const { return source; }
+    AudioFile* getSource() const { return source; }
 };
 
 class AudioOutput {
 private:
     AudioBuffer buffer; // аудио буффер с входными данными
-    char* destination; // место сохранения или проигрывания аудиосигнала
+    AudioFile* destination; // место сохранения или проигрывания аудиосигнала
 
 public:
     AudioOutput() : destination(nullptr) {}
 
-    void init(size_t size, int sampleRate, const char* destination) {
+    void init(size_t size, int sampleRate, AudioFile* destination) {
         buffer.init(size, sampleRate);
-        this->destination = strdup(destination);
+        this->destination = destination;
     }
 
     void freeOutput() {
         buffer.freeBuffer();
-        free(destination);
     }
 
     AudioBuffer* getBuffer() { return &buffer; }
-    const char* getDestination() const { return destination; }
+    AudioFile* getDestination() const { return destination; }
 };
 
 class PluginSettings {
@@ -216,8 +214,8 @@ public:
     void init(size_t inputSize, int inputSampleRate, AudioFile* inputSource,
         size_t outputSize, int outputSampleRate, AudioFile* outputDestination,
         AudioEffect** effects, size_t numEffects) {
-        input.init(inputSize, inputSampleRate, inputSource->getFilePath());
-        output.init(outputSize, outputSampleRate, outputDestination->getFilePath());
+        input.init(inputSize, inputSampleRate, inputSource);
+        output.init(outputSize, outputSampleRate, outputDestination);
         this->effects = effects;
         this->numEffects = numEffects;
     }
