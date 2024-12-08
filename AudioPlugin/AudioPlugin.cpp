@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
+#include <stdexcept>
+#include <string>
 
+// Класс для буфера аудиоданных
 class AudioBuffer {
 private:
     float* data; // указатель на массив данных аудиосигнала
@@ -20,14 +23,27 @@ public:
         this->size = size;
         this->sampleRate = sampleRate;
     }
+
     void freeBuffer() {
         free(this->data);
     }
+
     float* getData() const { return data; }
     size_t getSize() const { return size; }
     int getSampleRate() const { return sampleRate; }
+
+    // Возврат значения через ссылку
+    float& operator[](size_t index) {
+        return data[index];
+    }
+
+    // Возврат значения через указатель
+    float* getDataPointer() {
+        return data;
+    }
 };
 
+// Базовый класс для аудиоэффекта
 class AudioEffect {
 protected:
     float mix; // коэффициент смешивания сухого и обработанного сигнала
@@ -44,8 +60,20 @@ public:
         // Основная структура алгоритма
         processEffect(input, output);
     }
+
+    // Перегрузка оператора вывода для производных классов
+    virtual std::ostream& print(std::ostream& os) const {
+        os << "AudioEffect с коэффициентом смешивания: " << getMix();
+        return os;
+    }
+
+    // Перегрузка оператора вывода
+    friend std::ostream& operator<<(std::ostream& os, const AudioEffect& effect) {
+        return effect.print(os);
+    }
 };
 
+// Класс реверберации
 class Reverb : public AudioEffect {
 private:
     float roomSize; // размер комнаты для реверберации
@@ -88,12 +116,18 @@ public:
         free(delayBuffer1);
         free(delayBuffer2);
     }
+
+    std::ostream& print(std::ostream& os) const override {
+        os << "Reverb с размером комнаты: " << roomSize << ", демпфированием: " << dampening << ", коэффициентом смешивания: " << getMix();
+        return os;
+    }
 };
 
+// Класс задержки (Delay)
 class Delay : public AudioEffect {
 private:
     float delayTime; // время задержки в миллисекундах
-    float feedback; // уровень обратной связи
+    float feedback;  // коэффициент обратной связи
 
 public:
     Delay() : delayTime(0.0f), feedback(0.0f) {}
@@ -113,9 +147,9 @@ public:
         }
 
         for (size_t i = 0; i < bufferSize; i++) {
-            size_t delayIndex = (i + (size_t)(delayTime * input->getSampleRate() / 1000.0f)) % bufferSize;
-
+            size_t delayIndex = (i + (size_t)(delayTime * input->getSampleRate() / 1000)) % bufferSize;
             float delayedSample = delayBuffer[delayIndex];
+
             float outputSample = input->getData()[i] + feedback * delayedSample;
 
             delayBuffer[i] = input->getData()[i] + feedback * delayedSample;
@@ -125,70 +159,43 @@ public:
 
         free(delayBuffer);
     }
+
+    std::ostream& print(std::ostream& os) const override {
+        os << "Delay с временем задержки: " << delayTime << " мс, коэффициентом обратной связи: " << feedback << ", коэффициентом смешивания: " << getMix();
+        return os;
+    }
 };
 
+// Класс файла аудио
 class AudioFile {
 private:
-    char* filePath;
+    std::string filePath;
 
 public:
-    AudioFile(const char* filePath) {
-        this->filePath = _strdup(filePath);
+    AudioFile(const std::string& filePath) : filePath(filePath) {}
+
+    AudioFile(const AudioFile& other) : filePath(other.filePath) {}
+
+    AudioFile& operator=(const AudioFile& other) {
+        if (this != &other) {
+            filePath = other.filePath;
+        }
+        return *this;
     }
 
-    ~AudioFile() {
-        free(filePath);
-    }
+    const std::string& getFilePath() const { return filePath; }
 
-    const char* getFilePath() const { return filePath; }
+    friend std::ostream& operator<<(std::ostream& os, const AudioFile& file) {
+        os << "Путь к аудиофайлу: " << file.getFilePath();
+        return os;
+    }
 };
 
-class AudioInput {
-private:
-    AudioBuffer buffer; // аудио буффер с входными данными
-    AudioFile* source; // источник аудиосигнала (например, файл)
-
-public:
-    AudioInput() : source(nullptr) {}
-
-    void init(size_t size, int sampleRate, AudioFile* source) {
-        buffer.init(size, sampleRate);
-        this->source = source;
-    }
-
-    void freeInput() {
-        buffer.freeBuffer();
-    }
-
-    AudioBuffer* getBuffer() { return &buffer; }
-    AudioFile* getSource() const { return source; }
-};
-
-class AudioOutput {
-private:
-    AudioBuffer buffer; // аудио буффер с входными данными
-    AudioFile* destination; // место сохранения или проигрывания аудиосигнала
-
-public:
-    AudioOutput() : destination(nullptr) {}
-
-    void init(size_t size, int sampleRate, AudioFile* destination) {
-        buffer.init(size, sampleRate);
-        this->destination = destination;
-    }
-
-    void freeOutput() {
-        buffer.freeBuffer();
-    }
-
-    AudioBuffer* getBuffer() { return &buffer; }
-    AudioFile* getDestination() const { return destination; }
-};
-
+// Класс настроек плагина
 class PluginSettings {
 private:
-    float gain; // усиление сигнала
-    int bypass; // флаг включения/выключения эффекта
+    float gain;
+    int bypass;
 
 public:
     PluginSettings() : gain(1.0f), bypass(0) {}
@@ -200,13 +207,14 @@ public:
     int getBypass() const { return bypass; }
 };
 
+// Класс плагина
 class AudioPlugin {
 private:
-    AudioInput input; // аудиовход
-    AudioOutput output; // аудиовыход
-    AudioEffect** effects; // массив указателей на эффекты
-    size_t numEffects; // количество эффектов
-    PluginSettings settings; // настройки плагина
+    AudioBuffer input;
+    AudioBuffer output;
+    AudioEffect** effects;
+    size_t numEffects;
+    PluginSettings settings;
 
 public:
     AudioPlugin() : effects(nullptr), numEffects(0) {}
@@ -214,15 +222,15 @@ public:
     void init(size_t inputSize, int inputSampleRate, AudioFile* inputSource,
         size_t outputSize, int outputSampleRate, AudioFile* outputDestination,
         AudioEffect** effects, size_t numEffects) {
-        input.init(inputSize, inputSampleRate, inputSource);
-        output.init(outputSize, outputSampleRate, outputDestination);
+        input.init(inputSize, inputSampleRate);
+        output.init(outputSize, outputSampleRate);
         this->effects = effects;
         this->numEffects = numEffects;
     }
 
     void freePlugin() {
-        input.freeInput();
-        output.freeOutput();
+        input.freeBuffer();
+        output.freeBuffer();
         for (size_t i = 0; i < numEffects; i++) {
             delete effects[i];
         }
@@ -230,46 +238,63 @@ public:
     }
 
     void applyEffects() {
-        for (size_t i = 0; i < numEffects; i++) {
-            effects[i]->applyEffect(input.getBuffer(), output.getBuffer());
+        try {
+            for (size_t i = 0; i < numEffects; i++) {
+                effects[i]->applyEffect(&input, &output);
+            }
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Ошибка при применении эффекта: " << e.what() << std::endl;
+            throw; // Повторное выбрасывание исключения
         }
     }
 
-    AudioInput* getInput() { return &input; }
-    AudioOutput* getOutput() { return &output; }
-    PluginSettings* getSettings() { return &settings; }
+    friend std::ostream& operator<<(std::ostream& os, const AudioPlugin& plugin) {
+        os << "Аудиоплагин с эффектами:\n";
+        for (size_t i = 0; i < plugin.numEffects; i++) {
+            os << *plugin.effects[i] << std::endl;
+        }
+        return os;
+    }
 };
 
 int main() {
     setlocale(LC_ALL, "ru");
 
-    // Создание динамического массива объектов класса
-    AudioEffect** effects = new AudioEffect * [2];
-    effects[0] = new Reverb();
-    effects[1] = new Delay();
+    try {
+        // Создание объекта плагина
+        AudioPlugin plugin;
 
-    // Инициализация эффектов
-    ((Reverb*)effects[0])->init(0.8f, 0.5f, 0.7f);
-    ((Delay*)effects[1])->init(500.0f, 0.4f, 0.6f);
+        AudioFile* inputFile = new AudioFile("input.wav");
+        AudioFile* outputFile = new AudioFile("output.wav");
 
-    // Создание объектов AudioFile
-    AudioFile* inputFile = new AudioFile("input.wav");
-    AudioFile* outputFile = new AudioFile("output.wav");
+        // Инициализация эффектов
+        AudioEffect** effects = new AudioEffect * [2];
+        effects[0] = new Reverb();
+        effects[1] = new Delay();
+        ((Reverb*)effects[0])->init(0.8f, 0.5f, 0.7f);
+        ((Delay*)effects[1])->init(500.0f, 0.4f, 0.6f);
 
-    // Создание аудиоплагина
-    AudioPlugin* plugin = new AudioPlugin();
-    plugin->init(1024, 44100, inputFile, 1024, 44100, outputFile, effects, 2);
+        plugin.init(1024, 44100, inputFile, 1024, 44100, outputFile, effects, 2);
 
-    // Применение эффектов
-    plugin->applyEffects();
+        // Применение эффектов
+        plugin.applyEffects();
 
-    // Освобождение памяти
-    plugin->freePlugin();
-    delete plugin;
-    delete inputFile;
-    delete outputFile;
+        // Вывод информации о плагине
+        std::cout << plugin << std::endl;
 
-    std::cout << "Аудио плагин обработал звук." << std::endl;
+        // Сообщение об успешной обработке
+        std::cout << "Звук успешно обработан!" << std::endl;
+
+        // Освобождение памяти
+        plugin.freePlugin();
+        delete inputFile;
+        delete outputFile;
+
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Произошла ошибка: " << e.what() << std::endl;
+    }
 
     return 0;
 }
