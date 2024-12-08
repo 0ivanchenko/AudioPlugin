@@ -133,7 +133,7 @@ private:
 
 public:
     AudioFile(const char* filePath) {
-        this->filePath = strdup(filePath);
+        this->filePath = _strdup(filePath);
     }
 
     ~AudioFile() {
@@ -256,7 +256,7 @@ int main() {
     AudioFile* inputFile = new AudioFile("input.wav");
     AudioFile* outputFile = new AudioFile("output.wav");
 
-    // Создание динамического объекта класса
+    // Создание аудиоплагина
     AudioPlugin* plugin = new AudioPlugin();
     plugin->init(1024, 44100, inputFile, 1024, 44100, outputFile, effects, 2);
 
@@ -268,6 +268,8 @@ int main() {
     delete plugin;
     delete inputFile;
     delete outputFile;
+
+    std::cout << "Аудио плагин обработал звук." << std::endl;
 
     return 0;
 }
