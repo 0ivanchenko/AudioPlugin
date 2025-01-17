@@ -82,10 +82,17 @@ private:
 public:
     Reverb() : roomSize(0.0f), dampening(0.0f) {}
 
-    void init(float roomSize, float dampening, float mix) {
+    Reverb(float roomSize, float dampening, float mix) : AudioEffect() {
         this->roomSize = roomSize;
         this->dampening = dampening;
         this->mix = mix;
+    }
+
+    Reverb& operator=(const AudioEffect& other) {
+        if (this != &other) {
+            this->mix = other.getMix();
+        }
+        return *this;
     }
 
     void processEffect(AudioBuffer* input, AudioBuffer* output) override {
@@ -132,7 +139,7 @@ private:
 public:
     Delay() : delayTime(0.0f), feedback(0.0f) {}
 
-    void init(float delayTime, float feedback, float mix) {
+    Delay(float delayTime, float feedback, float mix) : AudioEffect() {
         this->delayTime = delayTime;
         this->feedback = feedback;
         this->mix = mix;
@@ -270,10 +277,8 @@ int main() {
 
         // Инициализация эффектов
         AudioEffect** effects = new AudioEffect * [2];
-        effects[0] = new Reverb();
-        effects[1] = new Delay();
-        ((Reverb*)effects[0])->init(0.8f, 0.5f, 0.7f);
-        ((Delay*)effects[1])->init(500.0f, 0.4f, 0.6f);
+        effects[0] = new Reverb(0.8f, 0.5f, 0.7f);
+        effects[1] = new Delay(500.0f, 0.4f, 0.6f);
 
         plugin.init(1024, 44100, inputFile, 1024, 44100, outputFile, effects, 2);
 
